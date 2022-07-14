@@ -1,0 +1,20 @@
+[package]
+name = "n-gram"
+version = "0.1.0"
+edition = "2021"
+default-run = "n-gram"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "conv-xml"
+path = "bin/xml-to-words.rs"
+
+[[bin]]
+name = "conv-json"
+path = "bin/json-to-words.rs"
+
+[dependencies]
+roxmltree = "*"
+regex = "*"
+itertools = "*"
+serde_json = "*"
