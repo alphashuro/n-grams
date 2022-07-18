@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 use itertools::Itertools;
+use regex::Regex;
 
 pub fn line_to_words(line: &str) -> Vec<String> {
     let words_re = Regex::new(r"([\w']+)").unwrap();

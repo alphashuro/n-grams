@@ -14,7 +14,7 @@ pub fn unigrams(
     // create initial 0 counts of extra vocabulary
     // since there's no guarantee that the extra vocabulary
     // is present in the corpus
-    let initial_word_counts = to_hashmap_keys(vocabulary, |_| 0);
+    let initial_word_counts: HashMap<String, u32> = to_hashmap_keys(vocabulary, |_| 0);
 
     // add the actual counts from corpus
     let word_counts = count_nested(&word_lists);
