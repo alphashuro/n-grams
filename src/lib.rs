@@ -1,22 +1,8 @@
 use itertools::Itertools;
-use regex::Regex;
 use std::collections::HashMap;
-use utils::{count_nested, merge_hashmaps_with, to_hashmap_keys};
+use utils::{count_nested, lines_to_word_lists, merge_hashmaps_with, to_hashmap_keys};
 
 mod utils;
-
-pub fn line_to_words(line: &str) -> Vec<String> {
-    let words_re = Regex::new(r"([\w']+)").unwrap();
-
-    words_re
-        .captures_iter(&line)
-        .map(|capture| capture[1].to_lowercase())
-        .collect_vec()
-}
-
-pub fn lines_to_word_lists<'a>(lines: &Vec<String>) -> Vec<Vec<String>> {
-    lines.iter().map(|line| line_to_words(line)).collect_vec()
-}
 
 // TODO: add optional debug param
 pub fn unigrams(
@@ -28,7 +14,7 @@ pub fn unigrams(
     // create initial 0 counts of extra vocabulary
     // since there's no guarantee that the extra vocabulary
     // is present in the corpus
-    let initial_word_counts: HashMap<String, u32> = to_hashmap_keys(vocabulary, |_| 0);
+    let initial_word_counts = to_hashmap_keys(vocabulary, |_| 0);
 
     // add the actual counts from corpus
     let word_counts = count_nested(&word_lists);
@@ -104,20 +90,7 @@ mod tests {
 
     use itertools::Itertools;
 
-    use crate::{bigrams, lines_to_word_lists};
-
-    #[test]
-    fn test_lines_to_word_lists() {
-        let lines = vec!["chicago is cold", "africa is hot"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect_vec();
-
-        let expected = vec![vec!["chicago", "is", "cold"], vec!["africa", "is", "hot"]];
-        let actual = lines_to_word_lists(&lines);
-
-        assert_eq!(actual, expected);
-    }
+    use crate::*;
 
     fn get_test_corpus_1() -> Vec<String> {
         let corpus: Vec<&str> = vec![

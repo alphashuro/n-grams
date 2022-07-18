@@ -1,6 +1,21 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
+use itertools::Itertools;
+
+pub fn line_to_words(line: &str) -> Vec<String> {
+    let words_re = Regex::new(r"([\w']+)").unwrap();
+
+    words_re
+        .captures_iter(&line)
+        .map(|capture| capture[1].to_lowercase())
+        .collect_vec()
+}
+
+pub fn lines_to_word_lists<'a>(lines: &Vec<String>) -> Vec<Vec<String>> {
+    lines.iter().map(|line| line_to_words(line)).collect_vec()
+}
+
 pub fn to_hashmap_keys<K, V, F>(list: &Vec<K>, map_key_to_value: F) -> HashMap<K, V>
 where
     F: Fn(&K) -> V,
@@ -69,6 +84,19 @@ mod tests {
     use crate::utils::*;
     use itertools::Itertools;
     use std::collections::HashMap;
+
+    #[test]
+    fn test_lines_to_word_lists() {
+        let lines = vec!["chicago is cold", "africa is hot"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect_vec();
+
+        let expected = vec![vec!["chicago", "is", "cold"], vec!["africa", "is", "hot"]];
+        let actual = lines_to_word_lists(&lines);
+
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn test_merge_hashmaps_with() {
