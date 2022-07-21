@@ -4,8 +4,28 @@ use utils::{count_nested, lines_to_word_lists, merge_hashmaps_with, to_hashmap_k
 
 mod utils;
 
+#[derive(Default)]
 pub struct Options {
-    smoothing: Option<u32>,
+    add_k_smoothing: u32,
+    good_turing: bool,
+}
+
+impl Options {
+    pub fn new() -> Options {
+        Default::default()
+    }
+
+    pub fn with_add_k_smoothing(mut self: Self, k: u32) -> Self {
+        self.add_k_smoothing = k;
+
+        self
+    }
+
+    pub fn with_good_turing(mut self: Self, on: bool) -> Self {
+        self.good_turing = on;
+
+        self
+    }
 }
 
 // TODO: add optional debug param
@@ -14,7 +34,7 @@ pub fn unigrams(
     vocabulary: &Vec<String>, // optional extra vocabulary to compute n-gram probabilities for
     options: Options,
 ) -> HashMap<String, f32> {
-    let smoothing = options.smoothing.unwrap_or(0);
+    let smoothing = options.add_k_smoothing;
 
     let word_lists = lines_to_word_lists(corpus);
 
@@ -25,9 +45,18 @@ pub fn unigrams(
 
     // add the actual counts from corpus
     let word_counts = count_nested(&word_lists);
+    // TODO: only calculate this when good turing is on
 
     let total_counts = merge_hashmaps_with(word_counts, initial_word_counts, |l, r| l + r);
 
+    let counts_for_words =
+        total_counts
+            .iter()
+            .fold(HashMap::<u32, u32>::new(), |mut counts, (_word, count)| {
+                *counts.entry(*count).or_default() += 1;
+
+                counts
+            });
     let total_words: u32 = total_counts.values().sum::<u32>();
     let vocabulary_size = total_counts.keys().count() as u32;
 
@@ -36,8 +65,23 @@ pub fn unigrams(
         .map(|(word, &count)| {
             let gram = word.clone();
 
+            // smooth count if good turing is enabled
+            let c: f32 = match options.good_turing {
+                false => count as f32,
+                true => {
+                    let c_1 = count + 1;
+                    let n_1: f32 = *counts_for_words.get(&count).unwrap_or(&0) as f32;
+                    let n_2 = *counts_for_words.get(&(c_1)).unwrap_or(&0) as f32;
+
+                    match count {
+                        0 => n_2,
+                        _ => c_1 as f32 * (n_2 / n_1),
+                    }
+                }
+            };
+
             let unrounded_probability =
-                (count + smoothing) as f32 / (total_words + (smoothing * vocabulary_size)) as f32;
+                (c + smoothing as f32) / (total_words + (smoothing * vocabulary_size)) as f32;
             let rounded_probability = (unrounded_probability * 100.0).round() / 100.0;
 
             (gram, rounded_probability)
@@ -52,7 +96,7 @@ pub fn bigrams(
     vocabulary: &Vec<(String, String)>, // optional extra vocabulary to compute n-gram probabilities for
     options: Options,
 ) -> HashMap<(String, String), f32> {
-    let smoothing = options.smoothing.unwrap_or(0);
+    let smoothing = options.add_k_smoothing;
 
     let word_lists: Vec<Vec<String>> = lines_to_word_lists(corpus);
 
@@ -85,10 +129,18 @@ pub fn bigrams(
     let biword_counts = count_nested(&biword_lists);
 
     let total_counts = merge_hashmaps_with(biword_counts, initial_biword_counts, |l, r| l + r);
+    let counts_for_bigrams =
+        total_counts
+            .iter()
+            .fold(HashMap::<u32, u32>::new(), |mut counts, (_words, count)| {
+                *counts.entry(*count).or_default() += 1;
+
+                counts
+            });
 
     let probabilities = total_counts
         .iter()
-        .map(|(words, &biword_count)| {
+        .map(|(words, &count)| {
             let gram = words.clone();
             let probability: f32 = {
                 let first_word = words.0.clone();
@@ -96,8 +148,23 @@ pub fn bigrams(
                     .get(&first_word)
                     .expect("Should not reach this state");
 
+                // smooth count if good turing is enabled
+                let c: f32 = match options.good_turing {
+                    false => count as f32,
+                    true => {
+                        let c_1 = count + 1;
+                        let n_1: f32 = *counts_for_bigrams.get(&count).unwrap_or(&0) as f32;
+                        let n_2 = *counts_for_bigrams.get(&(c_1)).unwrap_or(&0) as f32;
+
+                        match count {
+                            0 => n_2,
+                            _ => c_1 as f32 * (n_2 / n_1),
+                        }
+                    }
+                };
+
                 let unrounded_probability =
-                    (biword_count + smoothing) as f32 / (first_word_count + vocabulary_size) as f32;
+                    (c + smoothing as f32) as f32 / (first_word_count + vocabulary_size) as f32;
                 let rounded_probability = (unrounded_probability * 100.0).round() / 100.0;
 
                 rounded_probability
@@ -118,6 +185,10 @@ mod tests {
 
     use crate::*;
 
+    fn to_vec_of_string(list: Vec<&str>) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect_vec()
+    }
+
     fn get_test_corpus_1() -> Vec<String> {
         let corpus: Vec<&str> = vec![
             "chicago is",
@@ -134,7 +205,32 @@ mod tests {
             "cold",
         ];
 
-        return corpus.iter().map(|s| s.to_string()).collect_vec();
+        to_vec_of_string(corpus)
+    }
+
+    fn get_test_corpus_2_species() -> Vec<String> {
+        let corpus: Vec<&str> = vec![
+            "carp",
+            "carp",
+            "carp",
+            "carp",
+            "carp",
+            "carp",
+            "carp",
+            "carp",
+            "carp",
+            "carp",
+            "perch",
+            "perch",
+            "perch",
+            "whitefish",
+            "whitefish",
+            "trout",
+            "salmon",
+            "eel",
+        ];
+
+        to_vec_of_string(corpus)
     }
 
     #[test]
@@ -149,7 +245,7 @@ mod tests {
         expected_unigrams.insert("cold".to_string(), 0.33);
         expected_unigrams.insert("hot".to_string(), 0.00);
 
-        let actual_unigrams = crate::unigrams(&corpus, &vocabulary, Options { smoothing: None });
+        let actual_unigrams = crate::unigrams(&corpus, &vocabulary, Options::new());
 
         assert_eq!(expected_unigrams, actual_unigrams);
     }
@@ -166,9 +262,22 @@ mod tests {
         expected_unigrams.insert("cold".to_string(), 0.32);
         expected_unigrams.insert("hot".to_string(), 0.05);
 
-        let actual_unigrams = crate::unigrams(&corpus, &vocabulary, Options { smoothing: Some(1) });
+        let actual_unigrams =
+            crate::unigrams(&corpus, &vocabulary, Options::new().with_add_k_smoothing(1));
 
         assert_eq!(expected_unigrams, actual_unigrams);
+    }
+
+    #[test]
+    fn test_unigrams_with_good_turing() {
+        let corpus: Vec<String> = get_test_corpus_2_species();
+
+        let vocabulary = to_vec_of_string(vec!["catfish", "bass"]);
+
+        let actual = crate::unigrams(&corpus, &vocabulary, Options::new().with_good_turing(true));
+
+        assert_eq!(0.04, actual["trout"]);
+        assert_eq!(0.17, actual["bass"]);
     }
 
     #[test]
@@ -182,7 +291,7 @@ mod tests {
         expected_bigrams.insert(("is".to_string(), "cold".to_string()), 0.50);
         expected_bigrams.insert(("is".to_string(), "hot".to_string()), 0.00);
 
-        let actual_bigrams = bigrams(&corpus, &vocabulary, Options { smoothing: None });
+        let actual_bigrams = bigrams(&corpus, &vocabulary, Options::new());
 
         assert_eq!(expected_bigrams, actual_bigrams);
     }
@@ -198,7 +307,7 @@ mod tests {
         expected_bigrams.insert(("is".to_string(), "cold".to_string()), 0.42);
         expected_bigrams.insert(("is".to_string(), "hot".to_string()), 0.08);
 
-        let actual_bigrams = bigrams(&corpus, &vocabulary, Options { smoothing: Some(1) });
+        let actual_bigrams = bigrams(&corpus, &vocabulary, Options::new().with_add_k_smoothing(1));
 
         assert_eq!(expected_bigrams, actual_bigrams);
     }
