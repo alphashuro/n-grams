@@ -18,13 +18,14 @@ fn main() {
     let text = std::fs::read_to_string(file_path).expect("Failed to read input file");
     let lines: Vec<String> = serde_json::from_str(&text).expect("Failed to read file as json");
 
-    let target_file_path = "words2.txt";
+    let target_file_path = file_path.to_owned() + ".txt";
     let target_file = File::create(&target_file_path).expect("Failed to open target file");
     let mut target_file = LineWriter::new(target_file);
 
     for line in lines {
         target_file
-            .write(line.as_bytes())
+            .write_all(line.as_bytes())
             .expect("Failed to write to target file");
+        target_file.write_all(b"\n");
     }
 }

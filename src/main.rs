@@ -1,9 +1,10 @@
 use itertools::Itertools;
-use regex::Regex;
+use n_gram::{bigrams, unigrams, utils::line_to_words, Options};
 use std::{
     collections::HashMap,
+    fmt::Display,
     fs::File,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, LineWriter, Write},
 };
 
 fn main() {
@@ -20,59 +21,52 @@ fn main() {
     let file = File::open(path).expect("Failed to read input file");
     let reader = BufReader::new(file);
 
-    // read line separated file and create index of each word and each two words
-    let words_re = Regex::new(r"([\w']+)").unwrap();
+    let lines = reader
+        .lines()
+        .filter_map(|l| match l {
+            Ok(line) => Some(line),
+            _ => None,
+        })
+        .collect_vec();
 
-    let mut unigram_counts: HashMap<String, u32> = HashMap::new();
-    let mut bigram_counts: HashMap<(String, String), u32> = HashMap::new();
+    let p_unigrams = unigrams(&lines, &Vec::new(), Options::new());
+    write_ps_to_csv::<String>(path, "unigrams", p_unigrams);
 
-    for line in reader.lines() {
-        match line {
-            Err(error) => {
-                println!("Error reading line: {}", error);
-                return;
-            }
-            Ok(text) => {
-                // TODO: split across sentences.
-                let words = words_re
-                    .captures_iter(&text)
-                    .map(|capture| capture[1].to_lowercase());
+    let p_bigrams = bigrams(&lines, &Vec::new(), Options::new());
+    write_ps_to_csv::<(String, String)>(path, "bigrams", p_bigrams);
 
-                // calculate unigrams and bigrams
-                for (word, next_word) in words.tuple_windows() {
-                    let unigram_key = &word;
-                    let unigram_count = *unigram_counts.get(unigram_key).unwrap_or(&0);
+    let p_unigrams_with_laplacian =
+        unigrams(&lines, &Vec::new(), Options::new().with_add_k_smoothing(1));
+    write_ps_to_csv::<String>(path, "unigrams.laplacian", p_unigrams_with_laplacian);
 
-                    unigram_counts.insert(unigram_key.to_string(), unigram_count + 1);
+    let p_bigrams_with_laplacian =
+        bigrams(&lines, &Vec::new(), Options::new().with_add_k_smoothing(1));
+    write_ps_to_csv::<(String, String)>(path, "bigrams.laplacian", p_bigrams_with_laplacian);
 
-                    let bigram_key = (word, next_word);
-                    let bigram_count = *bigram_counts.get(&bigram_key).unwrap_or(&0);
+    let p_unigrams_with_good_turing =
+        unigrams(&lines, &Vec::new(), Options::new().with_good_turing(true));
+    write_ps_to_csv::<String>(path, "unigrams.good_turing", p_unigrams_with_good_turing);
 
-                    bigram_counts.insert(bigram_key, bigram_count + 1);
-                }
-            }
-        }
+    let p_bigrams_with_good_turing =
+        bigrams(&lines, &Vec::new(), Options::new().with_good_turing(true));
+    write_ps_to_csv::<(String, String)>(path, "bigrams.good_turing", p_bigrams_with_good_turing);
+}
+
+fn write_ps_to_csv<K>(path: &str, prefix: &str, hashmap: HashMap<K, f32>)
+where
+    K: std::fmt::Debug,
+{
+    let target_file_path = path.to_owned() + "." + prefix + ".csv";
+    let target_file = File::create(&target_file_path).expect("Failed to open target file");
+    let mut target_file = LineWriter::new(target_file);
+
+    target_file
+        .write_all("w,p(w)\n".as_bytes())
+        .expect("Failed to write to target file");
+
+    for (gram, p) in hashmap {
+        target_file
+            .write_all(format!("{:?},{}\n", gram, p).as_bytes())
+            .expect("Failed to write to target file");
     }
-
-    let mut bigram_probabilities: HashMap<(String, String), f32> = HashMap::new();
-
-    for ((first_word, second_word), bigram_count) in bigram_counts.iter() {
-        let first_word_count = unigram_counts.get(first_word).unwrap_or(&0);
-        let bigram_probability = *bigram_count as f32 / *first_word_count as f32;
-
-        bigram_probabilities.insert(
-            (first_word.to_string(), second_word.to_string()),
-            bigram_probability,
-        );
-    }
-
-    println!("unigram probabilities: {:?}", unigram_counts);
-    println!("bigrams probabilities: {:?}", bigram_probabilities);
-
-    println!("{} unigram count", unigram_counts.len());
-    println!("{} bigram count", bigram_counts.len());
-
-    // add la-placian smoothing
-
-    // add good-turing discounting
 }

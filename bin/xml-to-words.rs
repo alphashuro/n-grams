@@ -23,13 +23,13 @@ fn main() {
         .filter(|n| n.tag_name().name() == tag_name)
         .filter_map(|n| n.text());
 
-    let target_file_path = "words.txt";
+    let target_file_path = file_path.to_owned() + ".txt";
     let target_file = File::create(&target_file_path).expect("Failed to open target file");
     let mut target_file = LineWriter::new(target_file);
 
     for line in words {
         target_file
-            .write(line.as_bytes())
+            .write_all(line.as_bytes())
             .expect("Failed to write to target file");
     }
 }

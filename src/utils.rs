@@ -1,3 +1,8 @@
+#![feature(test)]
+
+extern crate test;
+
+use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::hash::Hash;
 
@@ -5,19 +10,21 @@ use itertools::Itertools;
 use regex::Regex;
 
 pub fn line_to_words(line: &str) -> Vec<String> {
-    let words_re = Regex::new(r"([\w']+)").unwrap();
+    lazy_static! {
+        static ref WORDS_RE: Regex = Regex::new(r"([\w']+)").unwrap();
+    }
 
-    words_re
-        .captures_iter(&line)
+    WORDS_RE
+        .captures_iter(line)
         .map(|capture| capture[1].to_lowercase())
         .collect_vec()
 }
 
-pub fn lines_to_word_lists<'a>(lines: &Vec<String>) -> Vec<Vec<String>> {
+pub fn lines_to_word_lists(lines: &[String]) -> Vec<Vec<String>> {
     lines.iter().map(|line| line_to_words(line)).collect_vec()
 }
 
-pub fn to_hashmap_keys<K, V, F>(list: &Vec<K>, map_key_to_value: F) -> HashMap<K, V>
+pub fn to_hashmap_keys<K, V, F>(list: &[K], map_key_to_value: F) -> HashMap<K, V>
 where
     F: Fn(&K) -> V,
     K: Eq + Hash + Clone,
@@ -56,7 +63,7 @@ where
     target
 }
 
-pub fn count_nested<V>(list_of_lists: &Vec<Vec<V>>) -> HashMap<V, u32>
+pub fn count_nested<V>(list_of_lists: &[Vec<V>]) -> HashMap<V, u32>
 where
     V: Eq + Hash + Clone,
 {
@@ -69,7 +76,7 @@ where
         })
 }
 
-pub fn count_all<V>(list: &Vec<V>) -> HashMap<V, u32>
+pub fn count_all<V>(list: &[V]) -> HashMap<V, u32>
 where
     V: Eq + Hash + Clone,
 {
@@ -97,6 +104,16 @@ mod tests {
         let actual = lines_to_word_lists(&lines);
 
         assert_eq!(actual, expected);
+    }
+
+    #[bench]
+    fn bench_lines_to_word_lists(b: &mut test::Bencher) {
+        let lines = vec!["chicago is cold", "africa is hot"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect_vec();
+
+        b.iter(|| lines_to_word_lists(&lines))
     }
 
     #[test]

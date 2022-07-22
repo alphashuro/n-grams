@@ -1,8 +1,12 @@
+#![feature(test)]
+
+extern crate test;
+
 use itertools::Itertools;
 use std::collections::HashMap;
 use utils::{count_nested, lines_to_word_lists, merge_hashmaps_with, to_hashmap_keys};
 
-mod utils;
+pub mod utils;
 
 #[derive(Default)]
 pub struct Options {
@@ -15,13 +19,13 @@ impl Options {
         Default::default()
     }
 
-    pub fn with_add_k_smoothing(mut self: Self, k: u32) -> Self {
+    pub fn with_add_k_smoothing(mut self, k: u32) -> Self {
         self.add_k_smoothing = k;
 
         self
     }
 
-    pub fn with_good_turing(mut self: Self, on: bool) -> Self {
+    pub fn with_good_turing(mut self, on: bool) -> Self {
         self.good_turing = on;
 
         self
@@ -30,8 +34,8 @@ impl Options {
 
 // TODO: add optional debug param
 pub fn unigrams(
-    corpus: &Vec<String>,     // lines
-    vocabulary: &Vec<String>, // optional extra vocabulary to compute n-gram probabilities for
+    corpus: &[String],     // lines
+    vocabulary: &[String], // optional extra vocabulary to compute n-gram probabilities for
     options: Options,
 ) -> HashMap<String, f32> {
     let smoothing = options.add_k_smoothing;
@@ -82,9 +86,11 @@ pub fn unigrams(
 
             let unrounded_probability =
                 (c + smoothing as f32) / (total_words + (smoothing * vocabulary_size)) as f32;
-            let rounded_probability = (unrounded_probability * 100.0).round() / 100.0;
+            // During testing, the probabilities were much smaller than 0.00
+            // so I'm going to disable it for now
+            // let rounded_probability = (unrounded_probability * 100.0).round() / 100.0;
 
-            (gram, rounded_probability)
+            (gram, unrounded_probability)
         })
         .collect();
 
@@ -92,8 +98,8 @@ pub fn unigrams(
 }
 
 pub fn bigrams(
-    corpus: &Vec<String>,               // lines
-    vocabulary: &Vec<(String, String)>, // optional extra vocabulary to compute n-gram probabilities for
+    corpus: &[String],               // lines
+    vocabulary: &[(String, String)], // optional extra vocabulary to compute n-gram probabilities for
     options: Options,
 ) -> HashMap<(String, String), f32> {
     let smoothing = options.add_k_smoothing;
@@ -138,6 +144,7 @@ pub fn bigrams(
                 counts
             });
 
+    // TODO: this would be much faster if we stored the counts in a struct
     let probabilities = total_counts
         .iter()
         .map(|(words, &count)| {
@@ -165,9 +172,8 @@ pub fn bigrams(
 
                 let unrounded_probability = (c + smoothing as f32) as f32
                     / (first_word_count + (vocabulary_size * smoothing)) as f32;
-                let rounded_probability = (unrounded_probability * 100.0).round() / 100.0;
 
-                rounded_probability
+                unrounded_probability
             };
 
             (gram, probability)
@@ -248,6 +254,14 @@ mod tests {
         let actual_unigrams = crate::unigrams(&corpus, &vocabulary, Options::new());
 
         assert_eq!(expected_unigrams, actual_unigrams);
+    }
+
+    #[bench]
+    fn bench_unigrams(b: &mut test::Bencher) {
+        b.iter(|| {
+            let corpus: Vec<String> = get_test_corpus_1();
+            crate::unigrams(&corpus, &[], Options::new())
+        })
     }
 
     #[test]
