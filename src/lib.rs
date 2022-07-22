@@ -163,8 +163,8 @@ pub fn bigrams(
                     }
                 };
 
-                let unrounded_probability =
-                    (c + smoothing as f32) as f32 / (first_word_count + vocabulary_size) as f32;
+                let unrounded_probability = (c + smoothing as f32) as f32
+                    / (first_word_count + (vocabulary_size * smoothing)) as f32;
                 let rounded_probability = (unrounded_probability * 100.0).round() / 100.0;
 
                 rounded_probability
